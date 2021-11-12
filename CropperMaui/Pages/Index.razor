@@ -1,7 +1,125 @@
 ﻿@page "/"
 
-<h1>Hello, world!</h1>
+@using Microsoft.Maui.Controls
+@using Microsoft.Maui.Essentials
 
-Welcome to your new app.
+<div>
+    <h3>Cropper</h3>
+    @if (imgfile != null)
+    {
+        <div style="overflow-x: hidden;">
+            <Cropper @ref="cropper"
+                MaxCropedHeight="500" MaxCropedWidth="500"
+                AnimeGifEnable="true"
+                ImageFile="imgfile"
+                PureCSharpProcessing="purecs"
+                @bind-Ratio="ratio"
+                RequireAspectRatio="enableProportion"
+                AspectRatio="proportion==0?1:proportion"
+                IsCropLocked="isCropLocked"
+                IsImageLocked="isImageLocked"
+                OnSizeChanged="t=>{
+                    width = t.Item1;
+                    height = t.Item2;
+                }"></Cropper>
+        </div>
+    }
+    @if (win)
+    {
+        <InputFile OnChange="OnInputFileChange"></InputFile>
+    }
+    else
+    {
+         <button @onclick="OnPick">Pick</button>   
+    }
+    <button @onclick="Done">Crop</button>
+    <br/>
+    @if (cropper != null)
+    {
+        <input disabled="@isImageLocked" type="range" min="@(cropper.MinRatio*100)" max="@(cropper.MaxRatio*100)" value="@(ratio*100)"
+                @oninput="OnRatioChange" />
+    }
+    @if (cropper != null)
+    {
+        <div>
+            width: @width |
+            height: @height
+        </div>
+    }
+    |IsCropLocked:<input type="checkbox" @bind="isCropLocked" />
+    |IsImageLocked:<input type="checkbox" @bind="isImageLocked" />
+    <br />
+    <input type="checkbox" @bind="enableProportion" />Enable proportion
+    @if (enableProportion)
+    {
+        <input type="number" @bind-value="proportion" placeholder="proportion" />
+    }
+    <br />
+    Pure c# processiing:
+    <input type="checkbox" @bind="purecs" />
+    <br/>
+    <img id="my-img" />
+</div>
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+@code {
+    [Inject]
+    private IJSRuntime JSRuntime { get; set; }
+    IBrowserFile imgfile;
+    Cropper cropper;
+    bool win;
+    double width;
+    double height;
+    bool enableProportion = false;
+    double proportion = 1d;
+    double ratio = 1;
+    bool isCropLocked = false;
+    bool isImageLocked = true;
+    bool purecs = false;
+    protected override void OnInitialized()
+    {
+#if WINDOWS
+    win = true;
+#endif
+        base.OnInitialized();
+    }
+    void OnInputFileChange(InputFileChangeEventArgs args)
+    {
+        imgfile = args.File;
+    }
+    void OnRatioChange(ChangeEventArgs args)
+    {
+        ratio = int.Parse(args.Value.ToString()) / 100.0;
+    }
+    async Task OnPick()
+    {
+        var allImgs = PickOptions.Images;
+        var types = new Dictionary<DevicePlatform, IEnumerable<string>>();
+        var ts = allImgs.FileTypes.Value.ToList();
+        ts.Add("image/gif");
+        types.Add(DevicePlatform.Android, ts);
+        types.Add(DevicePlatform.iOS, ts);
+        types.Add(DevicePlatform.UWP, ts);
+        allImgs.FileTypes = new FilePickerFileType(types);
+        try
+        {
+            var re = await FilePicker.PickAsync(allImgs);
+            imgfile = new StreamFile(await re.OpenReadAsync(), re.FileName, re.ContentType);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
+    }
+    async Task Done()
+    {
+        var re = await cropper.GetCropedResult();
+        var bin = await re.GetDataAsync();
+        await JSRuntime.SetImageAsync(bin, "my-img");
+    }
+}
+<style>
+::-webkit-scrollbar {
+    width: 0;  /* Remove scrollbar space */
+    background: transparent;  /* Optional: just make scrollbar invisible */
+}
+</style>
